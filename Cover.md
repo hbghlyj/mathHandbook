@@ -1,1 +1,0 @@
-<CENTER><IMG alt="" hspace=0 src="res/cover.jpg"
