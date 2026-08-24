@@ -45,20 +45,20 @@ lang=EN-US style='font-family:宋体_GB2312'>,</span><span lang=EN-US
 style='font-family:"MT Extra"'>L</span><span lang=EN-US style='font-family:
 宋体_GB2312'>,</span><i><span lang=EN-US>s</span></i><span lang=EN-US
 style='font-family:宋体_GB2312'>)</span><span lang=ZH-CN style='font-family:宋体_GB2312'>对应一项，这个数组满足</span><span
-lang=EN-US>0</span><span lang=EN-US style='font-family:Symbol'>&pound;</span><i><span
-lang=EN-US>p</span></i><span lang=EN-US style='font-family:Symbol'>&pound;</span><i><span
+lang=EN-US>0</span><span lang=EN-US>≤</span><i><span
+lang=EN-US>p</span></i><span lang=EN-US>≤</span><i><span
 lang=EN-US>n</span></i><span lang=EN-US style='font-family:宋体_GB2312'>, </span><span
-lang=EN-US>0</span><span lang=EN-US style='font-family:Symbol'>&pound;</span><i><span
-lang=EN-US>q</span></i><span lang=EN-US style='font-family:Symbol'>&pound;</span><i><span
+lang=EN-US>0</span><span lang=EN-US>≤</span><i><span
+lang=EN-US>q</span></i><span lang=EN-US>≤</span><i><span
 lang=EN-US>n</span></i><span lang=EN-US style='font-family:宋体_GB2312'>, </span><span
 lang=EN-US style='font-family:"MT Extra"'>L</span><span lang=EN-US
 style='font-family:宋体_GB2312'>, </span><span lang=EN-US>0</span><span
-lang=EN-US style='font-family:Symbol'>&pound;</span><i><span lang=EN-US>s</span></i><span
-lang=EN-US style='font-family:Symbol'>&pound;</span><i><span lang=EN-US>n</span></i><span
+lang=EN-US>≤</span><i><span lang=EN-US>s</span></i><span
+lang=EN-US>≤</span><i><span lang=EN-US>n</span></i><span
 lang=EN-US style='font-family:宋体_GB2312'>, </span><i><span lang=EN-US>p</span></i><span
 lang=EN-US>+<i>q</i>+</span><span lang=EN-US style='font-family:"MT Extra"'>L</span><span
 lang=EN-US>+<i>s</i>=<i>n</i></span><span lang=EN-US style='font-family:宋体_GB2312'>,
-</span><span lang=EN-US style='font-family:Symbol'>S</span><span lang=ZH-CN
+</span><span lang=EN-US>Σ</span><span lang=ZH-CN
 style='font-family:宋体_GB2312'>是对于所有这样的数组求和</span><span lang=EN-US
 style='font-family:宋体_GB2312'>.</span></p>
 </div>
