@@ -6,6 +6,7 @@ wrapped in ``<span style='font-family:Symbol'>``.  This script:
 
 * downloads (or reads a cached copy of) the Adobe Symbol→Unicode mapping
 * maps only text nodes / HTML entities inside those spans
+* recurses into nested Symbol spans (strips their styles, maps text once)
 * never mutates nested markup such as ``<img>``, ``<sub>``, ``<i>``
 * removes only the ``font-family: Symbol`` CSS declaration, leaving
   properties like ``font-style`` or ``letter-spacing`` intact
@@ -241,7 +242,12 @@ def map_text_node(text: str, mapping: Dict[int, str]) -> str:
 
 
 def map_inner_html(inner: str, mapping: Dict[int, str]) -> str:
-    """Map Symbol text/entities; copy nested HTML tags through unchanged."""
+    """Map Symbol text/entities; copy nested HTML tags through unchanged.
+
+    Nested ``<span>`` trees are *not* handled here — ``rewrite_fragment``
+    recurses into those so their styles can be stripped without mapping
+    the same characters twice.
+    """
     pieces: List[str] = []
     for match in INNER_TOKEN_RE.finditer(inner):
         token = match.group(0)
@@ -288,46 +294,80 @@ def is_bare_span(open_tag: str) -> bool:
     return BARE_SPAN_RE.fullmatch(open_tag) is not None
 
 
-def replace_symbol_spans(text: str, mapping: Dict[int, str]) -> Tuple[str, int]:
-    """Rewrite every Symbol-font span in *text*.  Returns (new_text, count)."""
+def rewrite_fragment(
+    text: str, mapping: Dict[int, str], map_text: bool = False
+) -> Tuple[str, int]:
+    """Walk *text*, rewriting Symbol spans and optionally mapping text nodes.
+
+    Nested spans are visited recursively.  ``map_text`` is sticky: once a
+    Symbol ancestor has been entered, descendant text is mapped exactly
+    once (so an inner Symbol span is not double-mapped).  Non-span tags
+    such as ``<img>`` / ``<i>`` are copied through unchanged.
+    """
     out: List[str] = []
-    pos = 0
     count = 0
+    pos = 0
     n = len(text)
     while pos < n:
-        match = SPAN_OPEN_RE.search(text, pos)
-        if not match:
-            out.append(text[pos:])
-            break
-        span_start = match.start()
-        out.append(text[pos:span_start])
-        gt = find_tag_end(text, span_start)
-        if gt < 0:
-            out.append(text[span_start:])
-            break
-        open_tag = text[span_start : gt + 1]
-        if not SYMBOL_FONT_RE.search(open_tag):
-            out.append(open_tag)
+        if SPAN_OPEN_RE.match(text, pos):
+            gt = find_tag_end(text, pos)
+            if gt < 0:
+                rest = text[pos:]
+                out.append(map_inner_html(rest, mapping) if map_text else rest)
+                break
+            open_tag = text[pos : gt + 1]
+            is_symbol = bool(SYMBOL_FONT_RE.search(open_tag))
+            inner_start = gt + 1
+            close_start, close_end = find_matching_close_span(text, inner_start)
+            if close_start < 0:
+                out.append(open_tag)
+                pos = gt + 1
+                continue
+            new_inner, nested = rewrite_fragment(
+                text[inner_start:close_start],
+                mapping,
+                map_text=map_text or is_symbol,
+            )
+            count += nested
+            close_tag = text[close_start:close_end]
+            if is_symbol:
+                count += 1
+                new_open = strip_symbol_style(open_tag)
+                if is_bare_span(new_open):
+                    out.append(new_inner)
+                else:
+                    out.append(new_open)
+                    out.append(new_inner)
+                    out.append(close_tag)
+            else:
+                out.append(open_tag)
+                out.append(new_inner)
+                out.append(close_tag)
+            pos = close_end
+            continue
+
+        if text[pos] == "<":
+            gt = find_tag_end(text, pos)
+            if gt < 0:
+                rest = text[pos:]
+                out.append(map_inner_html(rest, mapping) if map_text else rest)
+                break
+            out.append(text[pos : gt + 1])
             pos = gt + 1
             continue
-        inner_start = gt + 1
-        close_start, close_end = find_matching_close_span(text, inner_start)
-        if close_start < 0:
-            out.append(open_tag)
-            pos = gt + 1
-            continue
-        inner = text[inner_start:close_start]
-        new_inner = map_inner_html(inner, mapping)
-        new_open = strip_symbol_style(open_tag)
-        if is_bare_span(new_open):
-            out.append(new_inner)
-        else:
-            out.append(new_open)
-            out.append(new_inner)
-            out.append(text[close_start:close_end])
-        count += 1
-        pos = close_end
+
+        next_lt = text.find("<", pos)
+        if next_lt < 0:
+            next_lt = n
+        chunk = text[pos:next_lt]
+        out.append(map_inner_html(chunk, mapping) if map_text else chunk)
+        pos = next_lt
     return "".join(out), count
+
+
+def replace_symbol_spans(text: str, mapping: Dict[int, str]) -> Tuple[str, int]:
+    """Rewrite every Symbol-font span in *text*.  Returns (new_text, count)."""
+    return rewrite_fragment(text, mapping, map_text=False)
 
 
 def iter_markdown_files(root: Path) -> Iterable[Path]:
@@ -413,6 +453,51 @@ def run_self_test(mapping: Dict[int, str], tmp_dir: Path) -> int:
     check("no leftover Symbol family", "font-family:Symbol" not in got.replace(" ", ""))
     check("HTML entities mapped (&pound; → ≤)", "≤θ≤" in got)
     check("nbsp not mapped to euro", "&nbsp;ρ" in got)
+
+    # Nested Symbol span: outer rewrite must also strip the inner style,
+    # and must not map the inner text a second time (&acute; → ×, not ⋅).
+    nested_src = (
+        "<p><span lang=EN-US style='font-family:Symbol'>a"
+        "<span lang=EN-US style='font-family:Symbol;letter-spacing:1.0pt'>"
+        "&acute;b</span>g</span></p>"
+    )
+    nested_got, nested_count = replace_symbol_spans(nested_src, mapping)
+    check(
+        "nested Symbol spans both rewritten",
+        nested_count == 2,
+        f"count={nested_count}",
+    )
+    check(
+        "nested Symbol style stripped, leftover CSS kept",
+        "font-family:Symbol" not in nested_got.replace(" ", "")
+        and "style='letter-spacing:1.0pt'" in nested_got,
+        nested_got,
+    )
+    check(
+        "nested Symbol text mapped once (no double-map ×→⋅)",
+        nested_got
+        == (
+            "<p><span lang=EN-US>α"
+            "<span lang=EN-US style='letter-spacing:1.0pt'>×β</span>"
+            "γ</span></p>"
+        ),
+        nested_got,
+    )
+    nested_bare = (
+        "<p><span style='font-family:Symbol'>a"
+        "<span style='font-family:Symbol'>b</span>g</span></p>"
+    )
+    bare_got, _ = replace_symbol_spans(nested_bare, mapping)
+    check(
+        "nested bare Symbol spans both unwrapped",
+        bare_got == "<p>αβγ</p>",
+        bare_got,
+    )
+    twice, twice_count = replace_symbol_spans(nested_got, mapping)
+    check(
+        "second pass is a no-op (idempotent)",
+        twice == nested_got and twice_count == 0,
+    )
 
     # Round-trip the temp file the same way the batch job writes files.
     process_file(sample_path, mapping, dry_run=False)
